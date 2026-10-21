@@ -184,7 +184,7 @@ void trsp_update_files(gchar * input_file)
         {
             mfplen = flen;
             rewind(mfp);
-            jsn_object = g_malloc(mfplen);
+            jsn_object = g_malloc0(mfplen + 1);
             result = fread(jsn_object, mfplen, 1, mfp);
 
             if (result == 1)
@@ -202,9 +202,14 @@ void trsp_update_files(gchar * input_file)
                         if (json_obj->type == NX_JSON_NULL)
                             break;
 
+                        const char     *name =
+                            nx_json_get(json_obj, "name")->text_value;
+
+                        if (name == NULL)
+                            continue;
+
                         m_modes.id = nx_json_get(json_obj, "id")->int_value;
-                        strncpy(m_modes.name,
-                                nx_json_get(json_obj, "name")->text_value, 79);
+                        strncpy(m_modes.name, name, 79);
                         m_modes.name[79] = 0;
 
                         /* add data to hash table */
@@ -250,7 +255,7 @@ void trsp_update_files(gchar * input_file)
         {
             mfplen = flen;
             rewind(mfp);
-            jsn_object = g_malloc(mfplen);
+            jsn_object = g_malloc0(mfplen + 1);
             result = fread(jsn_object, mfplen, 1, mfp);
 
             if (result == 1)
@@ -268,9 +273,13 @@ void trsp_update_files(gchar * input_file)
                         if (json_obj->type == NX_JSON_NULL)
                             break;
 
-                        strncpy(m_trsp.description,
-                                nx_json_get(json_obj,
-                                            "description")->text_value, 79);
+                        const char     *description =
+                            nx_json_get(json_obj, "description")->text_value;
+
+                        if (description == NULL)
+                            continue;
+
+                        strncpy(m_trsp.description, description, 79);
                         m_trsp.description[79] = 0;
                         m_trsp.catnum =
                             nx_json_get(json_obj, "norad_cat_id")->int_value;
