@@ -31,6 +31,22 @@
 
 #include "compat.h"
 
+#ifdef G_OS_UNIX
+/*
+ * Get the directory holding the maps, logos and icons directories.
+ *
+ * This is PACKAGE_PIXMAPS_DIR unless the GPREDICT_PIXMAPS_DIR environment
+ * variable is set, e.g. to the pixmaps directory of the source tree when
+ * running gpredict without installing it.
+ */
+static const gchar *get_pixmaps_dir(void)
+{
+    const gchar    *dir = g_getenv("GPREDICT_PIXMAPS_DIR");
+
+    return dir ? dir : PACKAGE_PIXMAPS_DIR;
+}
+#endif
+
 /*
  * Get data directory.
  *
@@ -81,7 +97,8 @@ gchar *data_file_name(const gchar *data)
 /*
  * Get maps directory.
  *
- * On linux it corresponds to the PACKAGE_DATA_DIR/pixmaps/maps
+ * On linux it corresponds to PACKAGE_PIXMAPS_DIR/maps, or
+ * $GPREDICT_PIXMAPS_DIR/maps if that environment variable is set.
  * The function returns a newly allocated gchar * which must be free when
  * it is no longer needed.
  */
@@ -90,7 +107,7 @@ gchar *get_maps_dir()
     gchar *dir = NULL;
 
 #ifdef G_OS_UNIX
-    dir = g_strconcat(PACKAGE_PIXMAPS_DIR, G_DIR_SEPARATOR_S, "maps", NULL);
+    dir = g_strconcat(get_pixmaps_dir(), G_DIR_SEPARATOR_S, "maps", NULL);
 #else
 #ifdef G_OS_WIN32
     gchar *buff = g_win32_get_package_installation_directory_of_module(NULL);
@@ -128,7 +145,8 @@ gchar *map_file_name(const gchar *map)
 /*
  * Get logo directory.
  *
- * On linux it corresponds to the PACKAGE_DATA_DIR/pixmaps/logos
+ * On linux it corresponds to PACKAGE_PIXMAPS_DIR/logos, or
+ * $GPREDICT_PIXMAPS_DIR/logos if that environment variable is set.
  * The function returns a newly allocated gchar * which must be free when
  * it is no longer needed.
  */
@@ -137,7 +155,7 @@ gchar *get_logo_dir()
     gchar *dir = NULL;
 
 #ifdef G_OS_UNIX
-    dir = g_strconcat(PACKAGE_PIXMAPS_DIR, G_DIR_SEPARATOR_S, "logos", NULL);
+    dir = g_strconcat(get_pixmaps_dir(), G_DIR_SEPARATOR_S, "logos", NULL);
 #else
 #ifdef G_OS_WIN32
     gchar *buff = g_win32_get_package_installation_directory_of_module(NULL);
@@ -155,7 +173,8 @@ gchar *get_logo_dir()
 /*
  * Get icon directory.
  *
- * On linux it corresponds to the PACKAGE_DATA_DIR/pixmaps/icons
+ * On linux it corresponds to PACKAGE_PIXMAPS_DIR/icons, or
+ * $GPREDICT_PIXMAPS_DIR/icons if that environment variable is set.
  * The function returns a newly allocated gchar * which must be free when
  * it is no longer needed.
  */
@@ -164,7 +183,7 @@ gchar *get_icon_dir()
     gchar *dir = NULL;
 
 #ifdef G_OS_UNIX
-    dir = g_strconcat(PACKAGE_PIXMAPS_DIR, G_DIR_SEPARATOR_S, "icons", NULL);
+    dir = g_strconcat(get_pixmaps_dir(), G_DIR_SEPARATOR_S, "icons", NULL);
 #else
 #ifdef G_OS_WIN32
     gchar *buff = g_win32_get_package_installation_directory_of_module(NULL);
