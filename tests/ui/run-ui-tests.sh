@@ -44,6 +44,22 @@ if [ ! -s "$tmp/display" ]; then
     echo "Could not start Xvfb" >&2
     exit 1
 fi
+display=$(cat "$tmp/display")
 
-DISPLAY=:$(cat "$tmp/display") env -u WAYLAND_DISPLAY \
+# Xvfb can report its display number before it accepts connections, so wait
+# until a client can connect, or the first test fails to open the display
+connect='import socket, sys
+s = socket.socket(socket.AF_UNIX)
+s.connect("/tmp/.X11-unix/X" + sys.argv[1])'
+for i in $(seq 50); do
+    python3 -c "$connect" "$display" 2>/dev/null && break
+    sleep 0.1
+done
+if ! python3 -c "$connect" "$display" 2>/dev/null; then
+    cat "$tmp/x.log" >&2
+    echo "Xvfb does not accept connections on display :$display" >&2
+    exit 1
+fi
+
+DISPLAY=:$display env -u WAYLAND_DISPLAY \
     dbus-run-session -- python3 -m unittest "$@"

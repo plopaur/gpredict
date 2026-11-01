@@ -172,6 +172,9 @@ class Gpredict:
         self.stop()
 
     def _find_app(self):
+        if self.process.poll() is not None:
+            raise AssertionError("gpredict exited with code %d before its "
+                                 "window appeared" % self.process.returncode)
         desktop = Atspi.get_desktop(0)
         for i in range(desktop.get_child_count()):
             app = desktop.get_child_at_index(i)
