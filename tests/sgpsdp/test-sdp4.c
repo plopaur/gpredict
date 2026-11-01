@@ -42,6 +42,18 @@
 #endif
 #define TLE_FILE TLE_DIR "/test-sdp4.tle"
 
+/* Accuracy check: largest accepted deviation from the Spacetrack Report #3
+   values. Those come from a single-precision 1980 implementation, so a
+   correct propagator can be some tens of metres off (the code in 2008 was
+   off by up to 25 m, the current code by up to 9 m). */
+#define STR3_POS_TOL 0.05       /* km */
+#define STR3_VEL_TOL 5.0e-5     /* km/s */
+
+/* Regression check: largest accepted deviation from the baseline below,
+   loose enough for differences between CPUs and compilers. */
+#define REG_POS_TOL 0.001       /* km */
+#define REG_VEL_TOL 1.0e-6      /* km/s */
+
 /* structure to hold a set of data */
 typedef struct {
     double          t;
@@ -73,13 +85,49 @@ const dataset_t expected[TEST_STEPS] = {
 };
 
 
+/* Output of this code when the regression check was set up (2026-11-01),
+   printed with eight decimals. Update it only after checking that a
+   change in the results is intended. */
+const dataset_t baseline[TEST_STEPS] = {
+    {0.0,
+     7473.37217894, 428.95457424, 5828.74790289,
+     5.10715291, 6.44468284, -0.18613181},
+    {360.0,
+     -3305.22389961, 32410.86423224, -24697.17758780,
+     -1.30113546, -1.15131509, -0.28333530},
+    {720.0,
+     14271.28739447, 24110.46241165, -4725.76687166,
+     -0.32050430, 2.67984111, -2.08405302},
+    {1080.0,
+     -9990.05658196, 22717.36424399, -23616.89485741,
+     -1.01667276, -2.29026675, 0.72892285},
+    {1440.0,
+     9787.87447948, 33753.34397245, -15030.80445210,
+     -1.09425023, 0.92358992, -1.52230992}
+};
+
+
 char            tle_str[3][80];
 sat_t           sat;
+
+
+/* return 1 if the state in sat deviates from ref by more than the limits */
+static int deviates(const sat_t * sat, const dataset_t * ref,
+                    double pos_tol, double vel_tol)
+{
+    return fabs(sat->pos.x - ref->x) > pos_tol ||
+        fabs(sat->pos.y - ref->y) > pos_tol ||
+        fabs(sat->pos.z - ref->z) > pos_tol ||
+        fabs(sat->vel.x - ref->vx) > vel_tol ||
+        fabs(sat->vel.y - ref->vy) > vel_tol ||
+        fabs(sat->vel.z - ref->vz) > vel_tol;
+}
 
 int main(void)
 {
     FILE           *fp;
     int             i;
+    int             failed = 0;
 
     /* read tle file */
     fp = fopen(TLE_FILE, "r");
@@ -166,7 +214,22 @@ int main(void)
                sat.vel.z, expected[i].vz, fabs(sat.vel.z - expected[i].vz),
                100.0 * fabs(sat.vel.z -
                             expected[i].vz) / fabs(expected[i].vz));
+
+        if (deviates(&sat, &expected[i], STR3_POS_TOL, STR3_VEL_TOL))
+        {
+            printf("STEP %d  FAILED: deviation from Spacetrack Report #3 "
+                   "above %.3f km or %.0e km/s\n",
+                   i + 1, STR3_POS_TOL, STR3_VEL_TOL);
+            failed = 1;
+        }
+        if (deviates(&sat, &baseline[i], REG_POS_TOL, REG_VEL_TOL))
+        {
+            printf("STEP %d  FAILED: deviation from baseline "
+                   "above %.3f km or %.0e km/s\n",
+                   i + 1, REG_POS_TOL, REG_VEL_TOL);
+            failed = 1;
+        }
     }
 
-    return 0;
+    return failed;
 }
