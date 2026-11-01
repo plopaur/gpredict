@@ -50,4 +50,11 @@ EXTRA_DIST = \
 	ui/gpredict_ui.py     \
 	ui/run-ui-tests.sh    \
 	ui/run_tests.py       \
-	ui/test_modules.py
+	ui/test_ground_track.py \
+	ui/test_modules.py    \
+	ui/data/satdata/24278.sat \
+	ui/data/satdata/25544.sat \
+	ui/data/satdata/27607.sat \
+	ui/data/satdata/39444.sat \
+	ui/data/satdata/40967.sat \
+	ui/data/satdata/43017.sat

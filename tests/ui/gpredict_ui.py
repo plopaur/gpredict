@@ -16,11 +16,13 @@ windows gpredict has open at that moment, its log and, if UI_TEST_ARTIFACTS
 names a directory, a screenshot saved there.
 """
 
+import glob
 import os
 import shutil
 import subprocess
 import tempfile
 import time
+import unittest
 
 import gi
 
@@ -29,6 +31,11 @@ from gi.repository import Atspi, GLib  # noqa: E402
 
 TIMEOUT = 10
 SRCDIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+TESTDATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+
+# Satellite data frozen for the tests, so updates of data/satdata do not
+# move the satellites. The TLEs have their epoch on 2026-11-01.
+FROZEN_SATDATA = os.path.join(TESTDATA, "satdata")
 GITHUB_ACTIONS = os.environ.get("GITHUB_ACTIONS") == "true"
 
 # id of the running test, set by run_tests.py, used to name screenshots
@@ -56,6 +63,23 @@ def print_block(title, text):
         print("----- %s -----" % title)
         print(text.rstrip("\n"))
         print("----- end of %s -----" % title)
+
+
+def faketime_library():
+    """
+    Return the path of libfaketime, or None if it is not installed.
+    UI_TEST_FAKETIME_LIB overrides the search.
+    """
+    path = os.environ.get("UI_TEST_FAKETIME_LIB")
+    if path:
+        return path if os.path.exists(path) else None
+    for pattern in ("/usr/lib/*/faketime/libfaketime.so.1",
+                    "/usr/lib/faketime/libfaketime.so.1",
+                    "/usr/local/lib/faketime/libfaketime.so.1"):
+        found = sorted(glob.glob(pattern))
+        if found:
+            return found[0]
+    return None
 
 
 def _timeout_error(what, timeout):
@@ -106,6 +130,8 @@ def find(node, role, name=None):
 
 
 WINDOW_ROLES = ("frame", "dialog", "alert", "window", "file chooser")
+BUTTON_ROLES = ("button", "push button")
+MENU_ROLES = ("menu", "menu item", "check menu item", "radio menu item")
 
 
 def describe(node):
@@ -129,6 +155,13 @@ def click(node, button="b1c"):
     ext = node.get_extents(Atspi.CoordType.SCREEN)
     Atspi.generate_mouse_event(ext.x + ext.width // 2,
                                ext.y + ext.height // 2, button)
+
+
+def click_at(x, y, what, button="b1c"):
+    """Click the screen position x, y. Use button="b3c" for a right click."""
+    log("%s at %d, %d on %s" % ("right click" if button.startswith("b3")
+                                else "click", x, y, what))
+    Atspi.generate_mouse_event(x, y, button)
 
 
 def click_until(node, func, what, attempts=5):
@@ -176,33 +209,127 @@ def is_focused(node):
     return node.get_state_set().contains(Atspi.StateType.FOCUSED)
 
 
+def is_checked(node):
+    return node.get_state_set().contains(Atspi.StateType.CHECKED)
+
+
+def _screen_pixbuf(x=0, y=0, width=None, height=None):
+    """Return a GdkPixbuf with the given area of the X display."""
+    # Gdk opens its display when imported. Without this it can open the
+    # desktop's Wayland display instead of the private X display.
+    os.environ["GDK_BACKEND"] = "x11"
+    gi.require_version("Gdk", "3.0")
+    from gi.repository import Gdk
+
+    root = Gdk.get_default_root_window()
+    if width is None:
+        width, height = root.get_width(), root.get_height()
+    return Gdk.pixbuf_get_from_window(root, x, y, width, height)
+
+
 def save_screenshot(path):
     """Save a screenshot of the X display to path, return True on success."""
     try:
-        # Gdk opens its display when imported. Without this it can open the
-        # desktop's Wayland display instead of the private X display.
-        os.environ["GDK_BACKEND"] = "x11"
-        gi.require_version("Gdk", "3.0")
-        from gi.repository import Gdk
-
-        root = Gdk.get_default_root_window()
-        pixbuf = Gdk.pixbuf_get_from_window(root, 0, 0, root.get_width(),
-                                            root.get_height())
-        pixbuf.savev(path, "png", [], [])
+        _screen_pixbuf().savev(path, "png", [], [])
         return True
     except Exception as err:   # a screenshot must never hide the failure
         print("Could not save a screenshot: %s" % err)
         return False
 
 
+class Pixels:
+    """
+    The pixels of a widget as shown on the screen.
+
+    For widgets that draw their content themselves, like the map, whose
+    content is not in the accessibility tree.
+    """
+
+    def __init__(self, node):
+        ext = node.get_extents(Atspi.CoordType.SCREEN)
+        self.x, self.y = ext.x, ext.y
+        self.width, self.height = ext.width, ext.height
+        pixbuf = _screen_pixbuf(ext.x, ext.y, ext.width, ext.height)
+        self._data = pixbuf.read_pixel_bytes().get_data()
+        self._stride = pixbuf.get_rowstride()
+        self._channels = pixbuf.get_n_channels()
+
+    def rgb(self, x, y):
+        """Return the colour of the pixel x, y within the widget."""
+        i = y * self._stride + x * self._channels
+        return self._data[i], self._data[i + 1], self._data[i + 2]
+
+    def count(self, match):
+        """Return the number of pixels whose colour matches match(r, g, b)."""
+        return sum(1 for y in range(self.height) for x in range(self.width)
+                   if match(*self.rgb(x, y)))
+
+    def bounding_box(self, match):
+        """
+        Return the screen positions (left, top, right, bottom) of the
+        smallest rectangle around all pixels whose colour matches
+        match(r, g, b), or None if no pixel matches.
+        """
+        xs, ys = [], []
+        for y in range(self.height):
+            for x in range(self.width):
+                if match(*self.rgb(x, y)):
+                    xs.append(x)
+                    ys.append(y)
+        if not xs:
+            return None
+        return (self.x + min(xs), self.y + min(ys),
+                self.x + max(xs), self.y + max(ys))
+
+    def find_blocks(self, match, size):
+        """
+        Return the screen positions of the centres of all size x size
+        blocks of pixels whose colours all match match(r, g, b). Blocks that
+        overlap count once.
+        """
+        found = []
+        for y in range(self.height - size + 1):
+            for x in range(self.width - size + 1):
+                if any(abs(x - fx) < 2 * size and abs(y - fy) < 2 * size
+                       for fx, fy in found):
+                    continue
+                if all(match(*self.rgb(x + i, y + j))
+                       for j in range(size) for i in range(size)):
+                    found.append((x, y))
+        return [(self.x + x + size // 2, self.y + y + size // 2)
+                for x, y in found]
+
+    def find_block(self, match, size):
+        """
+        Return the screen position of the centre of the first size x size
+        block of pixels whose colours all match match(r, g, b), or None.
+        """
+        for y in range(self.height - size + 1):
+            for x in range(self.width - size + 1):
+                if all(match(*self.rgb(x + i, y + j))
+                       for j in range(size) for i in range(size)):
+                    return self.x + x + size // 2, self.y + y + size // 2
+        return None
+
+
 class Gpredict:
     """A gpredict process with its own configuration directory."""
 
-    def __init__(self, modules=("Amateur",), open_modules=None):
+    def __init__(self, modules=("Amateur",), open_modules=None,
+                 module_settings=None, start_time=None, satdata=None):
         """
         modules: names of the modules to create, copies of data/Amateur.mod
         open_modules: value for OPEN_MODULES in gpredict.cfg, or None for
                       gpredict's default
+        module_settings: settings to change in the modules, as
+                         {section: {key: value}}, e.g.
+                         {"MAP": {"SHOWTRACKS": "25544;"}}
+        start_time: UTC time at which gpredict starts, e.g.
+                    "2026-11-01 12:00:00", or None for the current time.
+                    The time runs on from there. Uses libfaketime; the test
+                    is skipped if it is not installed.
+        satdata: directory with .sat files to use instead of the satellite
+                 data in data/satdata, e.g. FROZEN_SATDATA
         """
         self.binary = os.environ.get("GPREDICT",
                                      os.path.join(SRCDIR, "src", "gpredict"))
@@ -215,16 +342,61 @@ class Gpredict:
         for name in modules:
             shutil.copy(os.path.join(SRCDIR, "data", "Amateur.mod"),
                         os.path.join(gpdir, "modules", name + ".mod"))
+            if module_settings:
+                cfg = self.read_module(name)
+                for section, values in module_settings.items():
+                    for key, value in values.items():
+                        cfg.set_value(section, key, value)
+                cfg.save_to_file(self.module_file(name))
         if open_modules is not None:
             with open(os.path.join(gpdir, "gpredict.cfg"), "w") as cfg:
                 cfg.write("[GLOBAL]\nOPEN_MODULES=%s\n" % open_modules)
 
+        # gpredict only creates the satellite data from data/satdata if
+        # there are no .sat files yet
+        if satdata is not None:
+            os.makedirs(os.path.join(gpdir, "satdata"))
+            for sat in glob.glob(os.path.join(satdata, "*.sat")):
+                shutil.copy(sat, os.path.join(gpdir, "satdata"))
+        self.start_time = start_time
+
         self.setup = "modules %s" % ", ".join(modules)
         if open_modules is not None:
             self.setup += ", OPEN_MODULES=%s" % open_modules
+        for section, values in (module_settings or {}).items():
+            for key, value in values.items():
+                self.setup += ", [%s] %s=%s" % (section, key, value)
+        if satdata is not None:
+            self.setup += ", satellites from %s" % os.path.relpath(satdata,
+                                                                   SRCDIR)
+        if start_time is not None:
+            self.setup += ", starting at %s UTC" % start_time
+
+    def module_file(self, name):
+        return os.path.join(self.confdir, "Gpredict", "modules",
+                            name + ".mod")
+
+    def read_module(self, name):
+        """Return the .mod file of a module as a GLib.KeyFile."""
+        cfg = GLib.KeyFile()
+        cfg.load_from_file(self.module_file(name),
+                           GLib.KeyFileFlags.KEEP_COMMENTS)
+        return cfg
 
     def start(self):
         global _current, _start_time
+
+        faketime = None
+        if self.start_time is not None:
+            faketime = faketime_library()
+            if faketime is None:
+                shutil.rmtree(self.confdir, ignore_errors=True)
+                msg = ("this test needs libfaketime to start gpredict at a "
+                       "fixed time (apt install faketime)")
+                # in CI a missing package must not go unnoticed
+                if os.environ.get("CI") == "true":
+                    raise AssertionError(msg)
+                raise unittest.SkipTest(msg)
 
         _current = self
         _start_time = time.monotonic()
@@ -243,6 +415,13 @@ class Gpredict:
                    LC_ALL="C",
                    LANGUAGE="C")
         env.pop("WAYLAND_DISPLAY", None)
+        if faketime is not None:
+            # start at start_time and let the time run on from there; the
+            # monotonic clock stays real for the GTK main loop
+            env.update(LD_PRELOAD=faketime,
+                       FAKETIME="@" + self.start_time,
+                       FAKETIME_DONT_FAKE_MONOTONIC="1",
+                       TZ="UTC")
         with open(os.path.join(self.confdir, "gpredict.out"), "w") as out:
             self.process = subprocess.Popen([self.binary], env=env,
                                             stdout=out,
@@ -256,6 +435,16 @@ class Gpredict:
             self.stop()
             raise
         return self
+
+    def quit(self):
+        """Quit gpredict with File > Quit, so it saves its configuration."""
+        self.menu("File", "Quit")
+        try:
+            code = self.process.wait(TIMEOUT)
+        except subprocess.TimeoutExpired:
+            raise _timeout_error("gpredict to quit", TIMEOUT)
+        log("gpredict quit with code %d" % code)
+        self.process = None
 
     def stop(self):
         global _current
@@ -356,9 +545,39 @@ class Gpredict:
             if text.strip():
                 print_block(title, text)
 
+    def map_view(self):
+        """Return the map of the current module."""
+        def largest_drawing_area():
+            areas = find_all(self.main_window(), "drawing area")
+            if not areas:
+                return None
+            return max(areas, key=lambda a: a.get_size().x * a.get_size().y)
+
+        return wait_for(largest_drawing_area, "the map view", quiet=True)
+
     def main_window(self):
-        return wait_for(lambda: find(self.app, "frame"), "the main window",
-                        quiet=True)
+        def find_main_window():
+            return next((w for w in self.windows()
+                         if w.get_role_name() == "frame" and
+                         w.get_name().startswith("Gpredict")), None)
+
+        return wait_for(find_main_window, "the main window", quiet=True)
+
+    def windows(self):
+        """Return the top level windows of gpredict."""
+        windows = []
+        for i in range(self.app.get_child_count()):
+            win = self.app.get_child_at_index(i)
+            if win is not None:
+                windows.append(win)
+        return windows
+
+    def window(self, name):
+        """Wait for the top level window whose title starts with name."""
+        return wait_for(lambda: next((w for w in self.windows()
+                                      if w.get_name().startswith(name)),
+                                     None),
+                        "window '%s'" % name)
 
     def dialog(self, title):
         return wait_for(lambda: find(self.app, "dialog", title),
@@ -382,6 +601,40 @@ class Gpredict:
         # the release of the click that opened it
         time.sleep(0.6)
         click(menu_item)
+
+    def module_menu(self, *path):
+        """
+        Select an item in the menu of the module button in the top right
+        corner of the current module, e.g. module_menu("Select satellite",
+        "ISS").
+        """
+        log("select module menu %s" % " > ".join(path))
+
+        def menu_button():
+            buttons = [b for b in walk(self.main_window())
+                       if b.get_role_name() in BUTTON_ROLES]
+            if not buttons:
+                return None
+            # the module button is the topmost button, in the module header
+            return min(buttons, key=lambda b: b.get_position(
+                Atspi.CoordType.SCREEN).y)
+
+        def showing_item(name):
+            return next((n for n in walk(self.app)
+                         if n.get_role_name() in MENU_ROLES and
+                         n.get_name() == name and is_showing(n)), None)
+
+        button = wait_for(menu_button, "the module menu button", quiet=True)
+        item = click_until(button, lambda: showing_item(path[0]),
+                           "module menu with item '%s'" % path[0])
+        for name in path[1:]:
+            # GTK ignores clicks within 500 ms of opening a menu
+            time.sleep(0.6)
+            click(item)
+            item = wait_for(lambda: showing_item(name),
+                            "menu item '%s'" % name)
+        time.sleep(0.6)
+        click(item)
 
     def module_tabs(self):
         """Return the names of the modules docked in the main window."""
