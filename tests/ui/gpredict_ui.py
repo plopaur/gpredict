@@ -16,8 +16,10 @@ windows gpredict has open at that moment, its log and, if UI_TEST_ARTIFACTS
 names a directory, a screenshot saved there.
 """
 
+import datetime
 import glob
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -180,6 +182,27 @@ def click_until(node, func, what, attempts=5):
         except AssertionError:
             pass
     raise _timeout_error("%s after %d clicks" % (what, attempts), attempts)
+
+
+def set_value(node, value):
+    """Set the value of a spin button or slider."""
+    log("set %s to %s" % (describe(node), value))
+    if not Atspi.Value.set_current_value(node, value):
+        raise AssertionError("Could not set %s to %s" % (describe(node),
+                                                         value))
+
+
+def move_window(window, x, y):
+    """
+    Move a top level window to the screen position x, y. Without a window
+    manager new windows open in the top left corner, over the main window.
+    """
+    log("move %s '%s' to %d, %d" % (window.get_role_name(), window.get_name(),
+                                     x, y))
+    Atspi.Component.set_position(window, x, y, Atspi.CoordType.SCREEN)
+    wait_for(lambda: window.get_position(Atspi.CoordType.SCREEN).x == x,
+             "%s '%s' to move" % (window.get_role_name(), window.get_name()),
+             quiet=True)
 
 
 def type_text(text):
@@ -635,6 +658,18 @@ class Gpredict:
                             "menu item '%s'" % name)
         time.sleep(0.6)
         click(item)
+
+    def module_time(self):
+        """
+        Return the time shown in the header of the current module as a
+        datetime, or None if it is not shown.
+        """
+        for node in walk(self.main_window()):
+            if node.get_role_name() == "label" and re.fullmatch(
+                    r"\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}", node.get_name()):
+                return datetime.datetime.strptime(node.get_name(),
+                                                  "%Y/%m/%d %H:%M:%S")
+        return None
 
     def module_tabs(self):
         """Return the names of the modules docked in the main window."""

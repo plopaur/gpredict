@@ -52,6 +52,7 @@ EXTRA_DIST = \
 	ui/run_tests.py       \
 	ui/test_ground_track.py \
 	ui/test_modules.py    \
+	ui/test_time_controller.py \
 	ui/data/satdata/24278.sat \
 	ui/data/satdata/25544.sat \
 	ui/data/satdata/27607.sat \
