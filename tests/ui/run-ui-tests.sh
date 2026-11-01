@@ -1,0 +1,49 @@
+#!/bin/sh
+#
+# Run the UI tests on a private Xvfb display with a private D-Bus session, so
+# the simulated clicks and key presses cannot reach the desktop.
+#
+# Usage: run-ui-tests.sh [path/to/gpredict] [unittest arguments]
+#
+# Exits with 77 (skipped) if Xvfb is not installed.
+
+set -e
+
+here=$(cd "$(dirname "$0")" && pwd)
+
+if [ -n "$1" ] && [ -x "$1" ]; then
+    GPREDICT=$(realpath "$1")
+    shift
+else
+    GPREDICT="$here/../../src/gpredict"
+fi
+export GPREDICT
+
+if [ $# -eq 0 ]; then
+    set -- discover -s "$here" -v
+fi
+
+if ! command -v Xvfb >/dev/null; then
+    echo "The UI tests need Xvfb (apt install xvfb), skipping." >&2
+    exit 77
+fi
+
+tmp=$(mktemp -d)
+trap 'kill $xpid 2>/dev/null; rm -rf "$tmp"' EXIT
+
+# let the X server pick a free display and report its number
+Xvfb -screen 0 1280x800x24 -displayfd 3 -nolisten tcp \
+    3>"$tmp/display" 2>"$tmp/x.log" &
+xpid=$!
+for i in $(seq 50); do
+    [ -s "$tmp/display" ] && break
+    sleep 0.1
+done
+if [ ! -s "$tmp/display" ]; then
+    cat "$tmp/x.log" >&2
+    echo "Could not start Xvfb" >&2
+    exit 1
+fi
+
+DISPLAY=:$(cat "$tmp/display") env -u WAYLAND_DISPLAY \
+    dbus-run-session -- python3 -m unittest "$@"

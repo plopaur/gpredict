@@ -1,5 +1,5 @@
 ACLOCAL_AMFLAGS = -I m4
-SUBDIRS = src doc icons pixmaps data po
+SUBDIRS = src doc icons pixmaps data po tests
 
 BUILT_SOURCES = $(top_builddir)/.version
 MOSTLYCLEANFILES = $(top_builddir)/.version

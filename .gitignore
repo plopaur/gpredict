@@ -22,6 +22,7 @@ aclocal.m4
 autom4te.cache
 INSTALL
 install-sh
+test-driver
 intltool-extract
 intltool-extract.in
 intltool-merge

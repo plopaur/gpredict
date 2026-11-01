@@ -1,0 +1,9 @@
+Makefile
+Makefile.in
+*.o
+*.log
+*.trs
+test-mod-mgr
+.deps
+.libs
+__pycache__
