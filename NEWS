@@ -1,4 +1,4 @@
-Changes in version 2.7 (TBD)
+Changes in version 2.7 (1 Nov 2026)
 
  - Fixed bug causing the rotator position fields never to update after Engage (#423)
  - Fixed incorrect reading of mean motion field from TLE line2 (#426)
