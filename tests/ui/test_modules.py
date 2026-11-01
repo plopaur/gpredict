@@ -7,6 +7,7 @@ from gpredict_ui import Gpredict, click, click_until, find, is_focused, \
 
 
 class OpenModuleTest(unittest.TestCase):
+    """File > Open module and restoring the open modules on startup."""
 
     def open_module(self, gp, name):
         gp.menu("File", "Open module")
@@ -19,6 +20,7 @@ class OpenModuleTest(unittest.TestCase):
         gp.wait_dialog_closed("Select a module")
 
     def test_open_module(self):
+        """File > Open module: a second module opens in a new tab."""
         with Gpredict(modules=["Amateur", "Weather"]) as gp:
             self.assertEqual(gp.module_tabs(), ["Amateur"])
 
@@ -29,6 +31,7 @@ class OpenModuleTest(unittest.TestCase):
             self.assertEqual(gp.main_window().get_name(), "Gpredict: Weather")
 
     def test_open_module_twice(self):
+        """File > Open module: an open module is raised, not opened again."""
         with Gpredict(modules=["Amateur", "Weather"]) as gp:
             self.open_module(gp, "Weather")
             wait_for(lambda: len(gp.module_tabs()) == 2, "a second tab")
@@ -41,14 +44,17 @@ class OpenModuleTest(unittest.TestCase):
             self.assertEqual(gp.module_tabs(), ["Amateur", "Weather"])
 
     def test_restore_skips_duplicates(self):
+        """Startup: duplicate names in OPEN_MODULES open only one tab."""
         with Gpredict(modules=["Amateur", "Weather"],
                       open_modules="Amateur;Weather;Amateur") as gp:
             self.assertEqual(gp.module_tabs(), ["Amateur", "Weather"])
 
 
 class NewModuleTest(unittest.TestCase):
+    """File > New module."""
 
     def test_module_name_entry(self):
+        """File > New module: invalid characters in the name are dropped."""
         with Gpredict() as gp:
             gp.menu("File", "New module")
             dialog = gp.dialog("Create new module")

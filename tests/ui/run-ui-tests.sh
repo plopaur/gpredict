@@ -5,6 +5,10 @@
 #
 # Usage: run-ui-tests.sh [path/to/gpredict] [unittest arguments]
 #
+# The output of a test (its steps, the UI state and gpredict's log) is only
+# shown when it fails. Screenshots and logs of failed tests are saved in
+# $UI_TEST_ARTIFACTS, by default ./ui-test-results.
+#
 # Exits with 77 (skipped) if Xvfb is not installed.
 
 set -e
@@ -20,8 +24,14 @@ fi
 export GPREDICT
 
 if [ $# -eq 0 ]; then
-    set -- discover -s "$here" -v
+    set -- discover -s "$here" -v -b
 fi
+
+if [ -z "$UI_TEST_ARTIFACTS" ]; then
+    UI_TEST_ARTIFACTS="$PWD/ui-test-results"
+    rm -rf "$UI_TEST_ARTIFACTS"
+fi
+export UI_TEST_ARTIFACTS
 
 if ! command -v Xvfb >/dev/null; then
     echo "The UI tests need Xvfb (apt install xvfb), skipping." >&2
@@ -61,5 +71,16 @@ if ! python3 -c "$connect" "$display" 2>/dev/null; then
     exit 1
 fi
 
-DISPLAY=:$display env -u WAYLAND_DISPLAY \
-    dbus-run-session -- python3 -m unittest "$@"
+# The D-Bus and AT-SPI services of the session print status messages. Keep
+# them out of the test report, which goes to descriptor 3, and show them
+# only on a failure.
+status=0
+DISPLAY=:$display GIO_USE_VFS=local UI_TEST_REPORT_FD=3 \
+    env -u WAYLAND_DISPLAY \
+    dbus-run-session -- python3 "$here/run_tests.py" "$@" \
+    3>&1 >"$tmp/session.log" 2>&1 || status=$?
+if [ $status -ne 0 ] && [ -s "$tmp/session.log" ]; then
+    echo "----- stderr of the test session -----"
+    cat "$tmp/session.log"
+fi
+exit $status

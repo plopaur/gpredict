@@ -39,6 +39,9 @@ check-ui: all
 	$(MAKE) -C $(top_builddir)/src
 	$(srcdir)/ui/run-ui-tests.sh $(abs_top_builddir)/src/gpredict
 
+clean-local:
+	rm -rf ui-test-results
+
 .PHONY: check-ui
 
 EXTRA_DIST = \
@@ -46,4 +49,5 @@ EXTRA_DIST = \
 	sgpsdp/test-sdp4.tle  \
 	ui/gpredict_ui.py     \
 	ui/run-ui-tests.sh    \
+	ui/run_tests.py       \
 	ui/test_modules.py
