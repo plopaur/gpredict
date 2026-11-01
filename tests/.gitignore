@@ -7,3 +7,6 @@ test-mod-mgr
 .deps
 .libs
 __pycache__
+test-sgp4
+test-sdp4
+.dirstamp

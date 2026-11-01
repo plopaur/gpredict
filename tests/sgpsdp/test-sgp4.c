@@ -36,6 +36,12 @@
 
 #define TEST_STEPS 5
 
+/* Directory holding the TLE file; set by tests/Makefile.am */
+#ifndef TLE_DIR
+#define TLE_DIR "."
+#endif
+#define TLE_FILE TLE_DIR "/test-sgp4.tle"
+
 /* structure to hold a set of data */
 typedef struct {
     double          t;
@@ -50,22 +56,38 @@ typedef struct {
 
 const dataset_t expected[TEST_STEPS] = {
     {0.0,
-     7473.37066650, 428.95261765, 5828.74786377,
-     5.1071513, 6.44468284, -0.18613096},
+     2328.97048951, -5995.22076416, 1719.97067261,
+     2.91207230, -0.98341546, -7.09081703},
     {360.0,
-     -3305.22537232, 32410.86328125, -24697.17675781,
-     -1.30113538, -1.15131518, -0.28333528},
+     2456.10705566, -6071.93853760, 1222.89727783,
+     2.67938992, -0.44829041, -7.22879231},
     {720.0,
-     14271.28759766, 24110.46411133, -4725.76837158,
-     -0.32050445, 2.67984074, -2.08405289},
+     2567.56195068, -6112.50384522, 713.96397400,
+     2.44024599, 0.09810869, -7.31995916},
     {1080.0,
-     -9990.05883789, 22717.35522461, -23616.890662501,
-     -1.01667246, -2.29026759, 0.72892364},
+     2663.09078980, -6115.48229980, 196.39640427,
+     2.19611958, 0.65241995, -7.36282432},
     {1440.0,
-     9787.86975097, 33753.34667969, -15030.81176758,
-     -1.09425966, 0.92358845, -1.52230928}
+     2742.55133057, -6079.67144775, -326.38095856,
+     1.94850229, 1.21106251, -7.35619372}
 };
 
+
+/* check digit of a 69 character TLE line, as computed by Checksum_Good() */
+static char line_checksum(const char *line)
+{
+    int             i, sum = 0;
+
+    for (i = 0; i < 68; i++)
+    {
+        if ((line[i] >= '0') && (line[i] <= '9'))
+            sum += line[i] - '0';
+        else if (line[i] == '-')
+            sum += 1;
+    }
+
+    return (char)('0' + sum % 10);
+}
 
 char            tle_str[3][80];
 sat_t           sat;
@@ -76,7 +98,7 @@ int main(void)
     int             i;
 
     /* read tle file */
-    fp = fopen("test-002.tle", "r");
+    fp = fopen(TLE_FILE, "r");
     if (fp != NULL)
     {
         if (fgets(tle_str[0], 80, fp) == NULL)
@@ -105,13 +127,13 @@ int main(void)
         }
         else
         {
-            printf("Could not read TLE data 2\n");
+            printf("Could not read TLE data 1\n");
             return 1;
         }
     }
     else
     {
-        printf("Could not open test-001.tle\n");
+        printf("Could not open %s\n", TLE_FILE);
         return 1;
     }
 
@@ -119,44 +141,86 @@ int main(void)
     printf("%s", tle_str[1]);
     printf("%s", tle_str[2]);
 
+    /* the mean motion field is eleven characters wide */
+    if (fabs(sat.tle.xno - 16.05824518) > 1.0e-9)
+    {
+        printf("Mean motion read as %.8f (expected 16.05824518)\n",
+               sat.tle.xno);
+        return 1;
+    }
+
+    /* a letter in the epoch field must be rejected, even when it
+       replaced a 0 and the checksum still holds */
+    {
+        char            tle_set[139];
+
+        memcpy(tle_set, tle_str[1], 69);
+        memcpy(&tle_set[69], tle_str[2], 69);
+        tle_set[138] = '\0';
+
+        if (!Good_Elements(tle_set))
+        {
+            printf("Good_Elements() rejected the unmodified TLE\n");
+            return 1;
+        }
+
+        tle_set[27] = 'O';      /* epoch 80275.98708465 -> 80275.987O8465 */
+        if (Good_Elements(tle_set))
+        {
+            printf("Good_Elements() accepted a letter in the epoch\n");
+            return 1;
+        }
+
+        tle_set[27] = '0';
+        tle_set[20] = ' ';      /* day of year 5, padded with spaces */
+        tle_set[21] = ' ';
+        tle_set[68] = line_checksum(tle_set);
+        if (!Good_Elements(tle_set))
+        {
+            printf("Good_Elements() rejected a space-padded day of year\n");
+            return 1;
+        }
+    }
+
     select_ephemeris(&sat);
 
-    printf("\nDEEP_SPACE_EPHEM: %d (expected %d)\n\n",
-           (sat.flags & DEEP_SPACE_EPHEM_FLAG), DEEP_SPACE_EPHEM_FLAG);
+    printf("\nDEEP_SPACE_EPHEM: %d (expected 0)\n\n",
+           (sat.flags & DEEP_SPACE_EPHEM_FLAG));
 
 
-    printf("                          RESULT            EXPECTED       "
-           "     DELTA\n");
+    printf("                         RESULT          EXPECTED          "
+           "  DELTA\n");
     printf("-----------------------------------------------------------"
-           "----------------------\n");
+           "-------------------\n");
 
     for (i = 0; i < TEST_STEPS; i++)
     {
-        SDP4(&sat, expected[i].t);
+
+        SGP4(&sat, expected[i].t);
         Convert_Sat_State(&sat.pos, &sat.vel);
 
-        printf("STEP %d  t: %6.1f  X: %15.8f   %15.8f   %.8f (%.5f%%)\n",
+        printf("STEP %d  t: %6.1f  X: %14.8f   %14.8f   %.8f (%.5f%%)\n",
                i + 1, expected[i].t, sat.pos.x, expected[i].x,
                fabs(sat.pos.x - expected[i].x),
                100.0 * fabs(sat.pos.x - expected[i].x) / fabs(expected[i].x));
-        printf("                   Y: %15.8f   %15.8f   %.8f (%.5f%%)\n",
+        printf("                   Y: %14.8f   %14.8f   %.8f (%.5f%%)\n",
                sat.pos.y, expected[i].y,
                fabs(sat.pos.y - expected[i].y),
                100.0 * fabs(sat.pos.y - expected[i].y) / fabs(expected[i].y));
-        printf("                   Z: %15.8f   %15.8f   %.8f (%.5f%%)\n",
+        printf("                   Z: %14.8f   %14.8f   %.8f (%.5f%%)\n",
                sat.pos.z, expected[i].z,
                fabs(sat.pos.z - expected[i].z),
                100.0 * fabs(sat.pos.z - expected[i].z) / fabs(expected[i].z));
-        printf("                  VX: %15.8f   %15.8f   %.8f (%.5f%%)\n",
+        printf("                  VX: %14.8f   %14.8f   %.8f (%.5f%%)\n",
                sat.vel.x, expected[i].vx,
                fabs(sat.vel.x - expected[i].vx),
                100.0 * fabs(sat.vel.x -
                             expected[i].vx) / fabs(expected[i].vx));
-        printf("                  VY: %15.8f   %15.8f   %.8f (%.5f%%)\n",
+        printf("                  VY: %14.8f   %14.8f   %.8f (%.5f%%)\n",
                sat.vel.y, expected[i].vy, fabs(sat.vel.y - expected[i].vy),
                100.0 * fabs(sat.vel.y -
                             expected[i].vy) / fabs(expected[i].vy));
-        printf("                  VZ: %15.8f   %15.8f   %.8f (%.5f%%)\n",
+        printf("                  VZ: %14.8f   %14.8f   %.8f (%.5f%%)\n",
                sat.vel.z, expected[i].vz, fabs(sat.vel.z - expected[i].vz),
                100.0 * fabs(sat.vel.z -
                             expected[i].vz) / fabs(expected[i].vz));

@@ -119,7 +119,6 @@ doc/man/gpredict.1
 doc/man/Makefile
 src/Makefile
 src/sgpsdp/Makefile
-src/sgpsdp/TR/Makefile
 tests/Makefile
 icons/Makefile
 pixmaps/Makefile
