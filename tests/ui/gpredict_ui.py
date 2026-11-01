@@ -232,11 +232,13 @@ class Gpredict:
 
         # On its first start in the empty configuration directory gpredict
         # copies the default configuration (ground station, satellite data)
-        # from its data directory. Take it from the source tree, so the tests
-        # neither need an installed gpredict nor depend on its version.
+        # from its data directory. Take it, and the maps, logos and icons,
+        # from the source tree, so the tests neither need an installed
+        # gpredict nor depend on its version.
         env = dict(os.environ,
                    XDG_CONFIG_HOME=self.confdir,
                    GPREDICT_DATA_DIR=SRCDIR,
+                   GPREDICT_PIXMAPS_DIR=os.path.join(SRCDIR, "pixmaps"),
                    GDK_BACKEND="x11",
                    LC_ALL="C",
                    LANGUAGE="C")
