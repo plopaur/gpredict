@@ -57,6 +57,14 @@ jobs:
       - name: Build
         run: make -j2
 
+      # test-mod-mgr needs a display and skips itself without one, so it is
+      # skipped in "make check" above. Running it directly makes a skip
+      # (exit code 77) fail the step.
+      - name: Run module manager tests
+        run: |
+          make -C tests test-mod-mgr
+          xvfb-run -a tests/test-mod-mgr
+
       - name: Run UI tests
         run: make -C tests check-ui
 
