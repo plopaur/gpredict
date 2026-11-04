@@ -102,9 +102,9 @@ int main(int argc, char *argv[])
 
 
 #ifdef ENABLE_NLS
-    bindtextdomain(PACKAGE, PACKAGE_LOCALE_DIR);
-    bind_textdomain_codeset(PACKAGE, "UTF-8");
-    textdomain(PACKAGE);
+    bindtextdomain(GETTEXT_PACKAGE, PACKAGE_LOCALE_DIR);
+    bind_textdomain_codeset(GETTEXT_PACKAGE, "UTF-8");
+    textdomain(GETTEXT_PACKAGE);
 #endif
 
 	/* Auto-detect macOS and set GDK backend to Quartz for native rendering */
