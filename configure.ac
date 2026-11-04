@@ -80,11 +80,6 @@ AC_DEFINE_UNQUOTED(GETTEXT_PACKAGE,
 AM_GNU_GETTEXT_REQUIRE_VERSION([0.21])
 AM_XGETTEXT_OPTION([--from-code=UTF-8])
 
-# define ENABLE_NLS if $USE_NLS = yes
-if test "$USE_NLS" = "yes" ; then
-	AC_DEFINE(ENABLE_NLS, 1, [Define if NLS is enabled])
-fi
-
 # compiler flags to enable generating coverage report
 # using gcov
 AC_ARG_ENABLE(coverage, [  --enable-coverage       enable coverge reports],enable_coerage=yes,enable_coverage=no)
