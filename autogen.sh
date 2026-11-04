@@ -39,8 +39,6 @@ echo "- autopoint."		&& \
   autopoint --force	&& \
 echo "- libtoolize."		&& \
   libtoolize --force	&& \
-echo "- intltoolize."		&& \
-  intltoolize --copy --force	&& \
 echo "- aclocal"		&& \
   aclocal 			&& \
 echo "- autoheader"		&& \

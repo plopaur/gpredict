@@ -13,9 +13,6 @@ pkgdata_DATA = AUTHORS NEWS README COPYING
 EXTRA_DIST = \
 	autogen.sh            \
 	git-version-gen       \
-	intltool-extract.in   \
-	intltool-merge.in     \
-	intltool-update.in    \
 	snap/snapcraft.yaml   \
 	win32/build-config.h  \
 	win32/config.mk       \

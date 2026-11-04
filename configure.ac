@@ -14,7 +14,6 @@ m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 AC_PROG_CC
 AC_SEARCH_LIBS([strerror],[cposix])
 
-IT_PROG_INTLTOOL([0.21])
 LT_INIT
 
 AC_CHECK_HEADERS([sys/time.h unistd.h getopt.h])
