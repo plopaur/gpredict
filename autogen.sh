@@ -35,10 +35,6 @@ fi
 # This might not be necessary with newer autotools:
 rm -f config.cache
 
-# We use glib-gettextize, which apparently does not add the intl directory 
-# (containing a local copy of libintl code), and therefore has a slightly different Makefile.
-echo "- glib-gettextize."	&& \
-  glib-gettextize --copy --force 	&& \
 echo "- autopoint."		&& \
   autopoint --force	&& \
 echo "- libtoolize."		&& \

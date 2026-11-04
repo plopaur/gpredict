@@ -68,17 +68,15 @@ fi
 AC_SUBST(PACKAGE_CFLAGS)
 AC_SUBST(PACKAGE_LIBS)
 
-# Add the languages which your application supports here.
-# Note that other progs only have ALL_LINGUAS and AM_GLIB_GNU_GETTEXT
-ALL_LINGUAS="cs da de el en_GB en_US es fi fr id it lt ru th uk"
-GETTEXT_PACKAGE=gpredict
+# Native language support using GNU gettext.
+# The supported languages are listed in po/LINGUAS.
+AM_GNU_GETTEXT_REQUIRE_VERSION([0.21])
 AM_GNU_GETTEXT([external])
+GETTEXT_PACKAGE=gpredict
 AC_SUBST(GETTEXT_PACKAGE)
 AC_DEFINE_UNQUOTED(GETTEXT_PACKAGE,
                    "$GETTEXT_PACKAGE",
                    "definition of GETTEXT_PACKAGE")
-AM_GNU_GETTEXT_REQUIRE_VERSION([0.21])
-AM_XGETTEXT_OPTION([--from-code=UTF-8])
 
 # compiler flags to enable generating coverage report
 # using gcov
